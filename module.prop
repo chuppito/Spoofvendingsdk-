@@ -2,5 +2,5 @@ id=spoofvending
 name=Spoof Vending SDK Toggle
 version=2
 versionCode=1
-author=Thomas
+author=Chuppito
 description=Modify spoofVendingSdk with Volume+ / Volume- key with buttom action
