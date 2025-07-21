@@ -1,0 +1,4 @@
+#!/system/bin/sh
+. /data/adb/magisk/util_functions.sh
+mount_partitions
+install_module
