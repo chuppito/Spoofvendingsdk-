@@ -10,12 +10,13 @@ log() {
 
 log " "
 log "==============================="
-log " Volume+ : ACTIVER spoofVendingSdk"
-log " Volume- : DÉSACTIVER spoofVendingSdk"
+log " Volume+ : ENABLE spoofVendingSdk"
+log " Volume- : DESABLE spoofVendingSdk"
 log " (10 secondes pour appuyer...)"
 log "==============================="
 
 # Attente d'un événement volume
+# Waiting for a volume event
 VOLUME_KEY=""
 event=""
 
@@ -38,7 +39,7 @@ if [ -z "$VOLUME_KEY" ]; then
   exit 1
 fi
 
-# Édition du JSON
+# Edit JSON
 if [ -f "$JSON_PATH" ]; then
     cp "$JSON_PATH" "${JSON_PATH}.bak"
     sed -i '/"spoofVendingSdk"/d' "$JSON_PATH"
@@ -49,7 +50,7 @@ else
     exit 1
 fi
 
-# Redémarrer killpi.sh
+# démarrer (start) killpi.sh
 log "↻ Vérification de killpi.sh..."
 
 if [ -f "$KILL_SCRIPT" ]; then
