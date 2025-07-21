@@ -3,4 +3,4 @@ name=Spoof Vending SDK Toggle
 version=2
 versionCode=1
 author=Thomas
-description=Modifie spoofVendingSdk avec Volume+ / Volume- via action.sh
+description=Modify spoofVendingSdk with Volume+ / Volume- key with buttom action
