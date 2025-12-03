@@ -1,6 +1,6 @@
-id=spoofvending
-name=Spoof Vending SDK Toggle
-version=2
-versionCode=1
+id=spoofvendingsdk
+name=Spoof Vending SDK + Fingerprint
+version=3
+versionCode=3
 author=Chuppito
-description=Modify spoofVendingSdk with Volume+ / Volume- key with buttom action
+description=Toggle spoofVendingSdk via Volume and insert spoofVendingFinger from custom.pif.prop
