@@ -4,97 +4,82 @@
 # Script : pif-toggle.sh
 # Auteur : [Chuppito]
 # Objet  : Active ou désactive spoofVendingSdk selon Volume+ ou Volume-
-# Fonction :
-#   - Extraction automatique du FINGERPRINT depuis custom.pif.json
-#   - Injection dans spoofVendingFinger
-#   - Mise à jour de spoofVendingSdk (1 ou 0)
-#   - Exécution de killpi.sh à la fin
-# =====================================================
-
-JSON_PATH="/data/adb/modules/playintegrityfix/custom.pif.json"
+MODDIR=${0%/*}
+PROP_PATH="/data/adb/modules/playintegrityfix/custom.pif.prop"
 KILL_SCRIPT="/data/adb/modules/playintegrityfix/killpi.sh"
 
-# === Fonction de log ===
-log() {
-    echo "$1"
-    ui_print "$1"
-}
+ui_print() { echo "$1"; }
 
-# === En-tête ===
-log ""
-log "==============================="
-log " Volume+ : active (1) spoofVendingSdk"
-log " Volume- : désactive (0) spoofVendingSdk"
-log " (10 secondes pour appuyer...)"
-log "==============================="
+ui_print "-----------------------------------"
+ui_print " Volume+ = ENABLE spoofVendingSdk (1)"
+ui_print " Volume- = DISABLE spoofVendingSdk (0)"
+ui_print " (10s pour appuyer...)"
+ui_print "-----------------------------------"
 
-# === Détection de la touche volume ===
+# wait for volume key (10s)
 VOLUME_KEY=""
 SECONDS=0
 while [ "$SECONDS" -lt 10 ]; do
-    event=$(getevent -lq 2>/dev/null | grep -m 1 "KEY_VOLUME")
-    if echo "$event" | grep -q "VOLUMEUP"; then
-        VOLUME_KEY="1"
-        log "✓ Volume+ détecté"
-        break
-    elif echo "$event" | grep -q "VOLUMEDOWN"; then
-        VOLUME_KEY="0"
-        log "✓ Volume- détecté"
-        break
-    fi
+  ev=$(getevent -lq 2>/dev/null | grep -m1 "KEY_VOLUME")
+  if echo "$ev" | grep -q "VOLUMEUP"; then
+    VOLUME_KEY="1"; ui_print "Volume+ détecté"; break
+  elif echo "$ev" | grep -q "VOLUMEDOWN"; then
+    VOLUME_KEY="0"; ui_print "Volume- détecté"; break
+  fi
 done
 
 if [ -z "$VOLUME_KEY" ]; then
-    log "✗ Aucun bouton détecté. Annulation."
-    exit 1
+  ui_print "Aucun bouton détecté - annulation."
+  exit 1
 fi
 
-# === Modification du JSON ===
-if [ -f "$JSON_PATH" ]; then
-    log "↻ Début de la modification du JSON..."
-    cp "$JSON_PATH" "${JSON_PATH}.bak"
+if [ ! -f "$PROP_PATH" ]; then
+  ui_print "Fichier non trouvé: $PROP_PATH"
+  exit 1
+fi
 
-    # 1️⃣ Extraire la valeur du FINGERPRINT
-    FINGERPRINT_VALUE=$(grep '"FINGERPRINT"' "$JSON_PATH" | sed -E 's/.*"[^"]*"[[:space:]]*:[[:space:]]*"([^"]*)",?/\1/')
+# backup
+cp "$PROP_PATH" "${PROP_PATH}.bak"
+ui_print "Sauvegarde: ${PROP_PATH}.bak"
 
-    if [ -n "$FINGERPRINT_VALUE" ]; then
-        log "✓ FINGERPRINT extrait : $FINGERPRINT_VALUE"
+# extract fingerprint from PROP_PATH
+# look for ro.build.fingerprint=..., or FINGERPRINT=..., or a generic fingerprint line
+FINGERPRINT_VALUE=""
+FINGERPRINT_VALUE=$(grep -m1 '^ro.build.fingerprint=' "$PROP_PATH" 2>/dev/null | sed 's/^ro.build.fingerprint=//')
+if [ -z "$FINGERPRINT_VALUE" ]; then
+  # try other possible keys
+  FINGERPRINT_VALUE=$(grep -m1 -i '^fingerprint[[:space:]]*=' "$PROP_PATH" 2>/dev/null | sed -E 's/^[^=]*=[[:space:]]*//')
+fi
 
-        # 2️⃣ Supprimer l'ancienne ligne spoofVendingFinger
-        sed -i '/"spoofVendingFinger"/d' "$JSON_PATH"
-        log "✔ Ancienne \"spoofVendingFinger\" supprimée (si présente)."
+# trim CR/LF and surrounding quotes/spaces
+FINGERPRINT_VALUE=$(printf "%s" "$FINGERPRINT_VALUE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^"//;s/"$//;s/\r//g')
 
-        # 3️⃣ S’assurer que verboseLogs finit par une virgule
-        sed -i -E '/"verboseLogs"[[:space:]]*:[[:space:]]*"[0O]"$/s/"$/",/' "$JSON_PATH"
-
-        # 4️⃣ Ajouter la nouvelle ligne spoofVendingFinger après verboseLogs
-        NEW_FINGER_LINE='    "spoofVendingFinger": "'"$FINGERPRINT_VALUE"'",'
-        sed -i -E '/"verboseLogs"/a\'"$NEW_FINGER_LINE" "$JSON_PATH"
-        log "✔ Nouvelle ligne \"spoofVendingFinger\" insérée avec succès."
-    else
-        log "❌ ERREUR : Impossible d'extraire la valeur du FINGERPRINT."
-    fi
-
-    # 5️⃣ Mettre à jour spoofVendingSdk selon la touche Volume
-    sed -i '/"spoofVendingSdk"/d' "$JSON_PATH"
-    sed -i -E '/"spoofBuild"[[:space:]]*:[[:space:]]*"[01]",/a\    "spoofVendingSdk": "'"$VOLUME_KEY"'",' "$JSON_PATH"
-    log "✔ spoofVendingSdk défini à $VOLUME_KEY"
-
+if [ -z "$FINGERPRINT_VALUE" ]; then
+  ui_print "Aucun fingerprint trouvé dans $PROP_PATH. Aucune insertion de spoofVendingFinger."
 else
-    log "❌ Fichier introuvable : $JSON_PATH"
-    exit 1
+  ui_print "Fingerprint trouvé: $FINGERPRINT_VALUE"
+  # remove existing spoofVendingFinger line(s)
+  sed -i '/^spoofVendingFinger[[:space:]]*=/d' "$PROP_PATH"
+  # ensure last non-empty line ends with newline and append the new key at the end
+  printf "\nspoofVendingFinger=%s\n" "$FINGERPRINT_VALUE" >> "$PROP_PATH"
+  ui_print "spoofVendingFinger ajouté en bas du fichier."
 fi
 
-# === Exécution de killpi.sh ===
-log ""
-log "↻ Vérification de killpi.sh..."
+# update spoofVendingSdk in the same prop file
+# remove any existing spoofVendingSdk= lines
+sed -i '/^spoofVendingSdk[[:space:]]*=/d' "$PROP_PATH"
+# append new value (or you may prefer to insert near other settings)
+printf "spoofVendingSdk=%s\n" "$VOLUME_KEY" >> "$PROP_PATH"
+ui_print "spoofVendingSdk=%s ajouté dans %s" "$VOLUME_KEY" "$PROP_PATH"
 
+# run killpi.sh if present
 if [ -f "$KILL_SCRIPT" ]; then
-    chmod +x "$KILL_SCRIPT"
-    "$KILL_SCRIPT"
-    log "✔ killpi.sh exécuté avec succès."
+  chmod +x "$KILL_SCRIPT" 2>/dev/null || true
+  sh "$KILL_SCRIPT" 2>/dev/null || true
+  ui_print "killpi.sh exécuté."
 else
-    log "⚠️  killpi.sh introuvable à $KILL_SCRIPT"
+  ui_print "killpi.sh introuvable (ignoré)."
 fi
 
+ui_print "Opération terminée."
 exit 0
